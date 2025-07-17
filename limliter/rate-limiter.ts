@@ -17,14 +17,12 @@ class RateLimiter {
 
     try {
       const reqCount = await this.redisClient.GET(key);
-      console.log(`Request count for ${key}:`, reqCount);
 
       // Initialize new window with first request
       if (reqCount === null) {
         await this.redisClient.SET(key, 1, {
           expiration: { type: "EX", value: this.windowMs },
         });
-        console.log(`Setting new key ${key} with value 1`);
       }
 
       // Check if rate limit exceeded
@@ -35,6 +33,42 @@ class RateLimiter {
 
       // Increment request count for this window
       await this.redisClient.INCR(key);
+      return true; // Request allowed
+    } catch (err) {
+      console.error("Error accessing Redis:", err);
+      return false; // Fail closed - deny request on Redis error
+    }
+  }
+
+  async slidingLogs(ip: string): Promise<boolean> {
+    const currentTime = Date.now();
+    const key = `sliding:${ip}`;
+
+    try {
+      // Remove old timestamps outside the sliding window
+      await this.redisClient.zRemRangeByScore(
+        key,
+        0,
+        currentTime - this.windowMs
+      );
+
+      // Get current count of requests in the sliding window
+      const requestCount = await this.redisClient.zCard(key);
+
+      // Check if rate limit would be exceeded
+      if (requestCount >= this.maxRequests) {
+        console.log(`Rate limit exceeded for IP: ${ip}`);
+        return false; // Rate limit exceeded
+      }
+
+      // Add current request timestamp to sorted set
+      await this.redisClient.zAdd(key, {
+        score: currentTime,
+        value: currentTime.toString(),
+      });
+
+      // Set expiration for cleanup - key expires after window + buffer time
+      await this.redisClient.expire(key, Math.ceil(this.windowMs / 1000) + 60);
       return true; // Request allowed
     } catch (err) {
       console.error("Error accessing Redis:", err);

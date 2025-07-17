@@ -1,15 +1,7 @@
-# rate-limiter
+# Rate Limiter Implementation
 
-To install dependencies:
-
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.2.5. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+- [x] Fixed Window
+- [x] Sliding Logs
+- [ ] Leaky Bucket
+- [ ] Sliding Window
+- [ ] Token Bucket
