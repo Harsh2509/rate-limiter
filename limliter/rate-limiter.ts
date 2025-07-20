@@ -160,6 +160,52 @@ class RateLimiter {
     });
     return true; // Request allowed
   }
+
+  async tokenBucket(ip: string): Promise<boolean> {
+    const currentTime = Date.now();
+    const key = `token:${ip}`;
+
+    try {
+      // Get the current token count and last refill time
+      const [tokenCount, lastRefill] = await this.redisClient.hmGet(key, [
+        "tokenCount",
+        "lastRefill",
+      ]);
+      const currentTokenCount = tokenCount
+        ? parseInt(tokenCount)
+        : this.maxRequests;
+      const lastRefillTime = lastRefill ? parseInt(lastRefill) : 0;
+      const elapsed = currentTime - lastRefillTime;
+
+      // Calculate if we need to refill tokens based on elapsed time
+      if (elapsed >= this.windowMs) {
+        const newTokenCount = this.maxRequests - 1; // Refill tokens using one for the current request
+        await this.redisClient.hSet(key, {
+          tokenCount: newTokenCount.toString(),
+          lastRefill: currentTime.toString(),
+        });
+        return true; // Request allowed after refill
+      }
+
+      if (currentTokenCount <= 0) {
+        console.log(`Rate limit exceeded for IP: ${ip}`);
+        return false; // Rate limit exceeded
+      }
+
+      // Decrement token count for the current request
+      await this.redisClient.hSet(key, {
+        tokenCount: (currentTokenCount - 1).toString(),
+        lastRefill: lastRefillTime.toString(),
+      });
+
+      // Set expiration for cleanup
+      await this.redisClient.expire(key, Math.ceil(this.windowMs / 1000) + 60);
+      return true; // Request allowed
+    } catch (err) {
+      console.error("Error accessing Redis:", err);
+      return false; // Fail closed - deny request on Redis error
+    }
+  }
 }
 
 export const rateLimiter = new RateLimiter(5, 10000);
