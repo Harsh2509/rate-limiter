@@ -3,5 +3,5 @@
 - [x] Fixed Window
 - [x] Sliding Logs
 - [x] Leaky Bucket
-- [ ] Sliding Window
-- [ ] Token Bucket
+- [x] Sliding Window
+- [x] Token Bucket
