@@ -127,6 +127,39 @@ class RateLimiter {
       return false; // Fail closed - deny request on Redis error
     }
   }
+
+  async slidingWindow(ip: string): Promise<boolean> {
+    // Implementation for sliding window algorithm
+    const currentTime = Date.now();
+    const currentWindow = Math.floor(currentTime / this.windowMs);
+    const key = `${ip}:${currentWindow}`;
+    const requestCount = await this.redisClient.get(key);
+    const parsedCount = requestCount ? parseInt(requestCount) : 0;
+    if (parsedCount >= this.maxRequests) {
+      return false; // Rate limit exceeded
+    }
+    // Get the last window count
+    const lastWindowCount = await this.redisClient.get(
+      `${ip}:${currentWindow - 1}`
+    );
+    const parsedLastCount = lastWindowCount ? parseInt(lastWindowCount) : 0;
+
+    // elapsed time percentage
+    const elapsedTime = (currentTime % this.windowMs) / this.windowMs;
+
+    // last window weighted count + current window count
+    const weightedCount = parsedLastCount * (1 - elapsedTime) + parsedCount;
+
+    if (weightedCount >= this.maxRequests) {
+      console.log(`Rate limit exceeded for IP: ${ip}`);
+      return false; // Rate limit exceeded
+    }
+    // Increment the request count for the current window
+    await this.redisClient.set(key, parsedCount + 1, {
+      expiration: { type: "EX", value: this.windowMs },
+    });
+    return true; // Request allowed
+  }
 }
 
 export const rateLimiter = new RateLimiter(5, 10000);

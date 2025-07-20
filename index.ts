@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 app.use(async (req, res, next) => {
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
   if (typeof ip === "string") {
-    const allowed = await rateLimiter.leakyBucket(ip);
+    const allowed = await rateLimiter.slidingWindow(ip);
     console.log("Allowed:", allowed);
     if (!allowed) {
       return res.status(429).send("Too many requests, please try again later.");
